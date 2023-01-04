@@ -62,12 +62,13 @@ Func _Menu()
 			Case $iMsg = $idAboutItem
 				MsgBox($MB_SYSTEMMODAL, "About", "         PowerPoint Transformer" & @CRLF & "Converts 4x3 Presentations into 16x9" & @CRLF & @CRLF & "  Written by Rich Alexander (2022)")
 		EndSelect
+
 	WEnd
 
 	GUIDelete()
 EndFunc
 
-;This Function allows the user to pick a directory to convert PowerPoints
+;This Function allows the user to pick a parent directory then be traverses to convert PowerPoints
 Func _Pick_Directory()
 	$directory = FileSelectFolder("Choose Folder to Convert Powerpoint Files", "")
 		If @error then
@@ -101,12 +102,13 @@ Func _Convert()
 
 EndFunc
 
-;This Function builds a List of all the files to be converted including sub directories
+;This Function recursively builds a List of all the files to be converted including sub directories
 Func list($path = "", $counter = 0)
 	$counter = 0
 	$path &= '\'
 	Local $Check_File_Type_ppt
 	Local $Check_File_Type_pptx
+	Local $Check_First_Char_Of_File
 	Local $list_files = '', $file, $demand_file = FileFindFirstFile($path & '*')
 	If $demand_file = -1 Then Return ''
 		While 1
@@ -118,7 +120,9 @@ Func list($path = "", $counter = 0)
 				Else
 					$Check_File_Type_pptx = StringRight($file,5)
 					$Check_File_Type_ppt = StringRight($file,4)
-				if ($Check_File_Type_pptx = ".pptx" or $Check_File_Type_ppt = ".ppt") Then
+					$Check_First_Char_Of_File = StringLeft($file,1)
+					; Only include PPT and PPTX.  Any hidden files with PPT or PPTX ignore as well
+					if ( ($Check_File_Type_pptx = ".pptx" or $Check_File_Type_ppt = ".ppt") and $Check_First_Char_Of_File <> "." and $Check_First_Char_Of_File <> "~") Then
 					$Total_Files = $Total_Files + 1
 					$listing &= $path & $file & "|"
 				Endif
@@ -140,22 +144,38 @@ Func File_Converter($File_Name)
 	Local $oPresentation = _PPT_PresentationOpen($oPPT, $sPresentation, True)
 		if @error then MsgBox($MB_SYSTEMMODAL, "Error", "Failed to Open PowerPoint File")
 
-
 	;Change the powerpoint to a 16 x 9 format
 	$oPresentation.PageSetup.SlideSize = $PpSlideSizeOnScreen16x9
 
 	;Loop thtough all images and adjust them to the full screen size
-	Local $curSlide, $curShape
+	Local $curSlide, $curShape, $localShapeCounter
 	For $curSlide In $oPPT.ActivePresentation.Slides
+		$localShapeCounter=0
 		For $curShape In $curSlide.Shapes
+			$localShapeCounter +=1
 			With $curShape
-				;Resize the image in the slide
-				.LockAspectRatio = False
-				.ScaleHeight(3.38, True)
-				.ScaleWidth(5.13, True)
-				.Rotation = 0
-				.Left = 0
-				.Top = 0
+				; For the powerpoints, Object 2 is the actual sheet music
+				if ($localShapeCounter=2) then
+					.LockAspectRatio = False
+					.Left = 0
+					.Top = 0
+					;.ScaleHeight(3.38, False)
+					.ScaleWidth(1.33, False)
+					.Rotation = 0
+				EndIf
+				; Objects 3 and 4 are the song number and the song title
+				if ($localShapeCounter=3 or $localShapeCounter=4) then
+					.LockAspectRatio = False
+					if( .left < 100 ) then
+						; Put song title top far left
+						.left=0
+					else
+						; Put song number to far right
+						.left=670
+					EndIf
+					.Top = 0
+					.Rotation = 0
+				EndIf
 			EndWith
 		Next ; curShape
 	Next ; curSlide
